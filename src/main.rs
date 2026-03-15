@@ -16,6 +16,7 @@ use std::collections::HashMap;
 pub enum Error{
     Io(std::io::Error),
     ParseInt(std::num::ParseIntError),
+    InvalidState,
     ParseToken,
     InvalidChar,
     ParseAutomata,
@@ -27,7 +28,6 @@ pub enum Error{
 enum Operator {
     Add,
     Mull,
-    None
 }
 
 impl FromStr for Operator {
@@ -131,13 +131,6 @@ impl FromStr for Token {
     }
 }
 
-struct Transition {
-    from_id: usize,
-    letter: TokenKind,
-    to_id: usize
-}
-
-
 enum ValidChar{
     TokenChar(Token),
     Sep
@@ -154,24 +147,53 @@ impl ValidChar {
     }
 }
 
+// Holds data about what is on a transition edge
+// TODO: Hash by letter and pop_symbol
+// IMPORTANT: Ignoring the case in which we are reading nothing(letter is epsilon) 
+//            as our automata does not have such transtions
+struct TransitionInfo{
+    letter: TokenKind,
+    pop_symbol: char,
+    push_symbols: String,
+}
+
+impl TransitionInfo{
+    fn to_str(&self) -> String{
+        return format!("({}, {}, {})", self.letter.to_str(), self.pop_symbol, self.push_symbols);
+    }
+}
+
+// Holds data about the whole transition
+struct Transition {
+    from_id: usize,
+    tran_info: TransitionInfo,
+    to_id: usize
+}
+
 impl FromStr for Transition{
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let split_s: Vec<&str> = s.split_whitespace().collect();
-        if split_s.len() != 3{
+        if split_s.len() != 5{
             return Err(Error::ParseTransition);
         }
         
+        // State information
         let from_id = split_s[0].parse::<usize>().map_err(|e| Error::ParseTransition)?;
-        let letter = split_s[1].parse::<TokenKind>()?;
-        let to_id = split_s[2].parse::<usize>().map_err(|e| Error::ParseTransition)?;
+        let to_id = split_s[4].parse::<usize>().map_err(|e| Error::ParseTransition)?;
 
-        Ok(Transition{from_id, letter, to_id})
+        // Transition information
+        let letter = split_s[1].parse::<TokenKind>()?;
+        let pop_symbol = split_s[2].parse::<char>().map_err(|e| Error::ParseTransition)?;
+        let push_symbols = split_s[3].to_string();
+
+        let tran_info = TransitionInfo{letter, pop_symbol, push_symbols};
+        Ok(Transition{from_id, tran_info, to_id})
     }
 }
 
 // usize is the id of another State
-type NeighList = HashMap<TokenKind, usize>;
+type NeighList = HashMap<usize, Vec<TransitionInfo>>;
 struct State{
     id: usize,
     is_final: bool,
@@ -179,37 +201,30 @@ struct State{
 }
 
 impl State{
+    fn new(id: usize) -> State{
+        State{id: id, is_final: false, neigh: NeighList::new()}
+    }
+
     fn new_final(id: usize) -> State{
         State{id: id, is_final: true, neigh: NeighList::new()}
     }
 
-    fn add_neigh(&mut self, token: TokenKind, to_state_id: usize) -> Option<usize>{
-        self.neigh.insert(token, to_state_id)
+    fn add_neigh(&mut self, to_state_id: usize, tran_info: TransitionInfo){
+        self.neigh.entry(to_state_id).or_default().push(tran_info);
+    }
+
+    fn get_neigh_id(&self, to_state_id: usize) -> Option<&Vec<TransitionInfo>>{
+        return self.neigh.get(&to_state_id);
     }
 }
+
+// State ids are indexes in the states vector
+// Currently defines a DPDA
 struct Automata{
     states: Vec<State>,
 }
 
 impl Automata{
-    fn print_info(&self){
-        print!("[DBG]: States: ");
-        for state in &self.states{
-            print!("{} ", state.id);
-        }
-
-        println!("\n[DBG]: Transitions:");
-        for state in &self.states{
-            for (letter, neigh_id) in &state.neigh{
-                print!("[DBG]: ({}, {}, {})\n",state.id, letter.to_str(), neigh_id);
-            }
-        }
-    }
-
-    fn new() -> Automata{
-        Automata{states: Vec::new()}
-    }
-
     fn load(path: &str) -> Result<Automata, Error> {
         let file = File::open(path).map_err(|e| Error::ParseAutomata)?; 
         let mut reader = BufReader::new(file);
@@ -219,6 +234,37 @@ impl Automata{
                 ._set_fin_states(&mut reader)?
                 ._load_trans(&mut reader)?;
         Ok(automata)
+    }
+
+    fn get_start_state(&self) -> Result<&State, Error>{
+        self.states.get(0).ok_or(Error::InvalidState)
+    }
+
+    fn new() -> Automata{
+        Automata{states: Vec::new()}
+    }
+
+    // Check if the list of tokens represents a valid mathematical expression
+    // syntax_automata will do the checking
+    // fn is_valid_expr(&self, tokens: &Vec<Token>) -> Option<Error>{
+    //     let curr_state = self.get_start_state()?;
+    //     for token in tokens{
+    //         let t_kind = token.kind();
+    //     }
+    // }
+
+    fn print_info(&self){
+        print!("[DBG]: States: ");
+        for state in &self.states{
+            print!("{} ", state.id);
+        }
+
+        println!("\n[DBG]: Transitions:");
+        for state in &self.states{
+            for (neigh_id, tran_infos) in &state.neigh{
+                print!("[DBG]: ({}, {}, {})\n", state.id, neigh_id, tran_infos.len());
+            }
+        }
     }
 
     // Loads the states in place and returns the updated automata
@@ -231,7 +277,7 @@ impl Automata{
                 .parse::<usize>()
                 .map_err(|e| Error::ParseAutomata)?;
 
-            self.states.push(State::new_final(id));
+            self.states.push(State::new(id));
         }
 
         Ok(self)
@@ -250,7 +296,7 @@ impl Automata{
 
             let from_state = self.states.get_mut(tran.from_id).ok_or(Error::ParseAutomata)?;
 
-            from_state.add_neigh(tran.letter, tran.to_id);
+            from_state.add_neigh(tran.to_id, tran.tran_info);
         }
         Ok(self)
     }
@@ -310,6 +356,8 @@ fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
 
     Ok(tokens)
 }
+
+
 // enum MathExpr<'a>{
 //     Val(i32),
 //     Add(&'a MathExpr<'a>, &'a MathExpr<'a>),
@@ -347,7 +395,7 @@ fn main() {
     // Test automata
     let automata = Automata::load("automata.txt").ok();
     match automata{
-        None => {print_err("Automata error");}
+        None => {print_err("Automata error"); return;}
         Some (aut) => aut.print_info(),
     }
 }
