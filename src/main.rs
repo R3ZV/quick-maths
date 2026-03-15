@@ -1,4 +1,10 @@
 // TODO: Add messages to errors!
+// TODO: Negative values will cause issues
+//      - Solution: Handle them in when evaluating
+// TODO: Floats will cause issues
+//      - Solution let the language parser handle numeric conversion, 
+//      - Just identify the slice that represents the number
+
 use std::i32;
 use std::str::FromStr;
 use std::fs::File;
@@ -11,6 +17,7 @@ pub enum Error{
     Io(std::io::Error),
     ParseInt(std::num::ParseIntError),
     ParseToken,
+    InvalidChar,
     ParseAutomata,
     ParseTransition,
 }
@@ -102,6 +109,15 @@ impl Token {
             Token::Par(Parenthesis::Closed) => TokenKind::ParClosed,
         }
     }
+
+    fn to_string(&self) -> String{
+        match self {
+            Token::Val(n) => n.to_string(),
+            Token::Op(_) => "+".to_string(),
+            Token::Par(Parenthesis::Open) => "(".to_string(),
+            Token::Par(Parenthesis::Closed) => ")".to_string(),
+        }
+    }
 }
 
 impl FromStr for Token {
@@ -119,6 +135,23 @@ struct Transition {
     from_id: usize,
     letter: TokenKind,
     to_id: usize
+}
+
+
+enum ValidChar{
+    TokenChar(Token),
+    Sep
+}
+
+
+impl ValidChar {
+    fn from_char(c: char) -> Result<Self, Error> {
+        if c == ' '{
+            return Ok(ValidChar::Sep)
+        }
+
+        c.to_string().parse::<Token>().map(ValidChar::TokenChar)
+    }
 }
 
 impl FromStr for Transition{
@@ -160,13 +193,15 @@ struct Automata{
 
 impl Automata{
     fn print_info(&self){
+        print!("[DBG]: States: ");
         for state in &self.states{
             print!("{} ", state.id);
         }
-        print!("\n");
+
+        println!("\n[DBG]: Transitions:");
         for state in &self.states{
             for (letter, neigh_id) in &state.neigh{
-                print!("({}, {}, {})\n",state.id, letter.to_str(), neigh_id);
+                print!("[DBG]: ({}, {}, {})\n",state.id, letter.to_str(), neigh_id);
             }
         }
     }
@@ -239,11 +274,42 @@ impl Automata{
 
 }
 
-// fn tokenize(s: &str) -> Result<Vec<Token>, ParseExprError> {
-//     for c in s{
-        
-//     }
-// }
+// TODO: Handle floats as well
+fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
+    let mut tokens: Vec<Token> = Vec::new();
+
+    let mut curr_nr: Option<i32> = None;
+
+    for c in s.chars() {
+        let parsed_char = ValidChar::from_char(c)?;
+
+        match parsed_char {
+            ValidChar::TokenChar(Token::Val(d)) => {
+                curr_nr = Some(curr_nr.unwrap_or(0) * 10 + d);
+            }
+            
+            ValidChar::Sep => {
+                if let Some(num) = curr_nr.take() {
+                    tokens.push(Token::Val(num));
+                }
+            }
+            
+            ValidChar::TokenChar(t) => {
+                if let Some(num) = curr_nr.take() {
+                    tokens.push(Token::Val(num));
+                }
+                tokens.push(t);
+            }
+        }
+    }
+
+    // Possibly ending with a number
+    if let Some(num) = curr_nr.take() {
+        tokens.push(Token::Val(num));
+    }
+
+    Ok(tokens)
+}
 // enum MathExpr<'a>{
 //     Val(i32),
 //     Add(&'a MathExpr<'a>, &'a MathExpr<'a>),
@@ -257,10 +323,31 @@ impl Automata{
 //     }
 // }
 
+fn print_err(err: &str){
+    println!("[ERR]: {}", err);
+}
+
+fn print_tokens(tokens: &Vec<Token>){
+    print!("[DBG]: Tokens: ");
+    for token in tokens{
+        print!("{}", token.to_string());
+    }
+    println!();
+}
+
 fn main() {
+    // Test tokenizer
+    let s = "  ( 5  + 3 + (2   ) )  ";
+    let tokens = tokenize(s).ok();
+    match tokens{
+        None => {print_err("Tokenizer");}
+        Some (tokens) => {print_tokens(&tokens);}
+    }
+
+    // Test automata
     let automata = Automata::load("automata.txt").ok();
     match automata{
-        None => {}
+        None => {print_err("Automata error");}
         Some (aut) => aut.print_info(),
     }
 }
