@@ -55,6 +55,13 @@ impl Operator{
             Operator::Mull => "*".to_string()
         }
     }
+
+    fn apply(&self, val1: i32, val2: i32) -> i32{
+        match self{
+            Operator::Add => val1 + val2,
+            Operator::Mull => val1 * val2
+        }
+    }
 }
 
 
@@ -214,6 +221,13 @@ impl MathExpr{
             }
         }
     }
+
+    fn eval(&self) -> i32{
+        match self{
+            MathExpr::Val(v) => {*v},
+            MathExpr::BinOp(op, e1, e2) => op.apply(e1.eval(), e2.eval())
+        }
+    }
 }
 
 struct Parser{
@@ -293,13 +307,6 @@ impl Parser{
     }
 }
 
-// impl MathExpr<'a>{
-//     fn from_str<'a>(str_expr: &str) -> MathExpr<'a>{
-//         for token in str_expr.split(" "){
-//             if (token.parse())
-//         }
-//     }
-// }
 
 fn print_err(err: &str){
     println!("[ERR]: {}", err);
@@ -324,5 +331,5 @@ fn main() {
 
     let mut parser = Parser::new(tokens);
     let expr = parser.parse_expr().ok().unwrap();
-    println!("{}", expr.to_str())
+    println!("{}={}", expr.to_str(), expr.eval());
 }
