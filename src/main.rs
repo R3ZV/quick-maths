@@ -7,11 +7,7 @@
 
 use std::i32;
 use std::str::FromStr;
-use std::fs::File;
 use std::hash::Hash;
-use std::io::{BufRead, BufReader};
-
-use std::collections::HashMap;
 
 pub enum Error{
     Io(std::io::Error),
@@ -19,10 +15,13 @@ pub enum Error{
     InvalidState,
     ParseToken,
     InvalidChar,
+    UnexpectedToken,
     ParseAutomata,
     ParseTransition,
 }
 
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 // The operator's precedence is it's value
 // Higher value, higher precedence, happens before others
 enum Operator {
@@ -42,6 +41,24 @@ impl FromStr for Operator {
     }
 }
 
+impl Operator{
+    fn get_precedence(&self) -> i32{
+        match self{
+            Operator::Add => 0,
+            Operator::Mull => 1
+        }
+    }
+
+    fn to_str(&self) -> String{
+        match self{
+            Operator::Add => "+".to_string(),
+            Operator::Mull => "*".to_string()
+        }
+    }
+}
+
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Parenthesis {
     Open,
     Closed
@@ -59,7 +76,6 @@ impl FromStr for Parenthesis {
     }
 }
 
-// Helper for state/automaton consturction
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum TokenKind {
     Val,
@@ -94,6 +110,7 @@ impl FromStr for TokenKind{
    
 }
 
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Token {
     Val(i32),
     Op(Operator),
@@ -136,7 +153,6 @@ enum ValidChar{
     Sep
 }
 
-
 impl ValidChar {
     fn from_char(c: char) -> Result<Self, Error> {
         if c == ' '{
@@ -145,179 +161,6 @@ impl ValidChar {
 
         c.to_string().parse::<Token>().map(ValidChar::TokenChar)
     }
-}
-
-// Holds data about what is on a transition edge
-// TODO: Hash by letter and pop_symbol
-// IMPORTANT: Ignoring the case in which we are reading nothing(letter is epsilon) 
-//            as our automata does not have such transtions
-struct TransitionInfo{
-    letter: TokenKind,
-    pop_symbol: char,
-    push_symbols: String,
-}
-
-impl TransitionInfo{
-    fn to_str(&self) -> String{
-        return format!("({}, {}, {})", self.letter.to_str(), self.pop_symbol, self.push_symbols);
-    }
-}
-
-// Holds data about the whole transition
-struct Transition {
-    from_id: usize,
-    tran_info: TransitionInfo,
-    to_id: usize
-}
-
-impl FromStr for Transition{
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let split_s: Vec<&str> = s.split_whitespace().collect();
-        if split_s.len() != 5{
-            return Err(Error::ParseTransition);
-        }
-        
-        // State information
-        let from_id = split_s[0].parse::<usize>().map_err(|e| Error::ParseTransition)?;
-        let to_id = split_s[4].parse::<usize>().map_err(|e| Error::ParseTransition)?;
-
-        // Transition information
-        let letter = split_s[1].parse::<TokenKind>()?;
-        let pop_symbol = split_s[2].parse::<char>().map_err(|e| Error::ParseTransition)?;
-        let push_symbols = split_s[3].to_string();
-
-        let tran_info = TransitionInfo{letter, pop_symbol, push_symbols};
-        Ok(Transition{from_id, tran_info, to_id})
-    }
-}
-
-// usize is the id of another State
-type NeighList = HashMap<usize, Vec<TransitionInfo>>;
-struct State{
-    id: usize,
-    is_final: bool,
-    neigh: NeighList
-}
-
-impl State{
-    fn new(id: usize) -> State{
-        State{id: id, is_final: false, neigh: NeighList::new()}
-    }
-
-    fn new_final(id: usize) -> State{
-        State{id: id, is_final: true, neigh: NeighList::new()}
-    }
-
-    fn add_neigh(&mut self, to_state_id: usize, tran_info: TransitionInfo){
-        self.neigh.entry(to_state_id).or_default().push(tran_info);
-    }
-
-    fn get_neigh_id(&self, to_state_id: usize) -> Option<&Vec<TransitionInfo>>{
-        return self.neigh.get(&to_state_id);
-    }
-}
-
-// State ids are indexes in the states vector
-// Currently defines a DPDA
-struct Automata{
-    states: Vec<State>,
-}
-
-impl Automata{
-    fn load(path: &str) -> Result<Automata, Error> {
-        let file = File::open(path).map_err(|e| Error::ParseAutomata)?; 
-        let mut reader = BufReader::new(file);
-
-        let mut automata = Automata::new();
-        automata._load_states(&mut reader)?
-                ._set_fin_states(&mut reader)?
-                ._load_trans(&mut reader)?;
-        Ok(automata)
-    }
-
-    fn get_start_state(&self) -> Result<&State, Error>{
-        self.states.get(0).ok_or(Error::InvalidState)
-    }
-
-    fn new() -> Automata{
-        Automata{states: Vec::new()}
-    }
-
-    // Check if the list of tokens represents a valid mathematical expression
-    // syntax_automata will do the checking
-    // fn is_valid_expr(&self, tokens: &Vec<Token>) -> Option<Error>{
-    //     let curr_state = self.get_start_state()?;
-    //     for token in tokens{
-    //         let t_kind = token.kind();
-    //     }
-    // }
-
-    fn print_info(&self){
-        print!("[DBG]: States: ");
-        for state in &self.states{
-            print!("{} ", state.id);
-        }
-
-        println!("\n[DBG]: Transitions:");
-        for state in &self.states{
-            for (neigh_id, tran_infos) in &state.neigh{
-                print!("[DBG]: ({}, {}, {})\n", state.id, neigh_id, tran_infos.len());
-            }
-        }
-    }
-
-    // Loads the states in place and returns the updated automata
-    fn _load_states(&mut self, reader: &mut BufReader<File>) -> Result<&mut Self, Error>{
-        let mut line = String::new();
-        reader.read_line(&mut line).map_err(|e| Error::ParseAutomata)?;
-
-        for state_id_str in line.split_whitespace() {
-            let id = state_id_str
-                .parse::<usize>()
-                .map_err(|e| Error::ParseAutomata)?;
-
-            self.states.push(State::new(id));
-        }
-
-        Ok(self)
-    }
-
-    // Loads the transitions in place and returns the automata
-    fn _load_trans(&mut self, reader: &mut BufReader<File>) -> Result<&mut Self, Error>{
-        for line in reader.lines(){
-            let line = line.map_err(|e| Error::ParseAutomata)?;
-            let tran = line.parse::<Transition>()?;
-
-            // Invalid to state
-            if tran.to_id >= self.states.len(){
-                return Err(Error::ParseAutomata)
-            }
-
-            let from_state = self.states.get_mut(tran.from_id).ok_or(Error::ParseAutomata)?;
-
-            from_state.add_neigh(tran.to_id, tran.tran_info);
-        }
-        Ok(self)
-    }
-
-    // Reads and sets the final states from the file, returns the updated automata
-    fn _set_fin_states(&mut self, reader: &mut BufReader<File>) -> Result<&mut Self, Error>{
-        let mut line = String::new();
-        reader.read_line(&mut line).map_err(|e| Error::ParseAutomata)?;
-
-        for state_id_str in line.split_whitespace() {
-            let id = state_id_str
-                .parse::<usize>()
-                .map_err(|e| Error::ParseAutomata)?;
-            
-            let state = self.states.get_mut(id).ok_or(Error::ParseAutomata)?;
-            state.is_final = true;
-        }
-
-        Ok(self)
-    }
-
 }
 
 // TODO: Handle floats as well
@@ -357,11 +200,98 @@ fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
     Ok(tokens)
 }
 
+enum MathExpr{
+    Val(i32),
+    BinOp(Operator, Box<MathExpr>, Box<MathExpr>),
+}
 
-// enum MathExpr<'a>{
-//     Val(i32),
-//     Add(&'a MathExpr<'a>, &'a MathExpr<'a>),
-// }
+impl MathExpr{
+    fn to_str(&self) -> String{
+        match self {
+            MathExpr::Val(v) => {format!("{}", v)},
+            MathExpr::BinOp(op, e1 , e2) => {
+                format!("{} ({}, {})", op.to_str(), e1.to_str(), e2.to_str())
+            }
+        }
+    }
+}
+
+struct Parser{
+    tokens: Vec<Token>,
+    cursor: usize,
+}
+
+impl Parser{
+    fn new(tokens: Vec<Token>) -> Parser{
+        Parser{tokens: tokens, cursor: 0}
+    }
+
+    fn consume(&mut self) -> Option<Token>{
+        if self.cursor >= self.tokens.len(){
+            return None;
+        }
+
+        let res = self.tokens[self.cursor];
+        self.cursor += 1;
+        Some(res)
+    }
+
+    fn current(&self) -> Option<Token>{
+        self.tokens.get(self.cursor).copied()
+    }
+
+    fn parse_primary(&mut self) -> Result<MathExpr, Error>{
+        let token = self.consume().ok_or(Error::UnexpectedToken)?;
+
+        match token{
+            Token::Val(v) => {Ok(MathExpr::Val(v))},
+            Token::Par(Parenthesis::Open) => {
+                let expr = self.parse_expr();
+                if self.consume() != Some(Token::Par(Parenthesis::Closed)){
+                    return Err(Error::UnexpectedToken);
+                }
+                return expr;
+            }
+            _ => {Err(Error::UnexpectedToken)}
+        }
+    }
+
+    fn parse_bin(&mut self, left: MathExpr, op: Operator) -> Result<MathExpr, Error>{
+        let mut right = self.parse_primary()?;
+
+        loop{
+            let token = self.current();
+            match token{
+                Some(Token::Op(next_op)) => {
+                    if next_op.get_precedence() > op.get_precedence(){
+                        self.consume();
+                        right = self.parse_bin(right, next_op)?;
+                    } else {
+                        break;
+                    }
+                }
+                _ =>{break;}
+            }
+        }
+
+        Ok(MathExpr::BinOp(op, Box::new(left), Box::new(right)))
+    }
+
+    fn parse_expr(&mut self) -> Result<MathExpr, Error>{
+        let mut left = self.parse_primary()?;
+        loop{
+            let token = self.current();
+            match token{
+                Some(Token::Op(op)) => {
+                    self.consume();
+                    left = self.parse_bin(left, op)?;
+                }
+                _ =>{break;}
+            }
+        }
+        Ok(left)
+    }
+}
 
 // impl MathExpr<'a>{
 //     fn from_str<'a>(str_expr: &str) -> MathExpr<'a>{
@@ -385,17 +315,14 @@ fn print_tokens(tokens: &Vec<Token>){
 
 fn main() {
     // Test tokenizer
-    let s = "  ( 5  + 3 + (2   ) )  ";
-    let tokens = tokenize(s).ok();
-    match tokens{
-        None => {print_err("Tokenizer");}
-        Some (tokens) => {print_tokens(&tokens);}
-    }
+    let s = " ( 3 +  5) +  2 * 7 ";
+    let tokens = tokenize(s).ok().unwrap();
+    // match tokens{
+    //     None => {print_err("Tokenizer");}
+    //     Some (tokens) => {print_tokens(&tokens);}
+    // }
 
-    // Test automata
-    let automata = Automata::load("automata.txt").ok();
-    match automata{
-        None => {print_err("Automata error"); return;}
-        Some (aut) => aut.print_info(),
-    }
+    let mut parser = Parser::new(tokens);
+    let expr = parser.parse_expr().ok().unwrap();
+    println!("{}", expr.to_str())
 }
