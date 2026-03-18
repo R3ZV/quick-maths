@@ -5,13 +5,15 @@
 //      - Solution let the language parser handle numeric conversion, 
 //      - Just identify the slice that represents the number
 //TODO: Why don't consume and current work with refereces?
+//TODO: Make parse functions for operators and parant that accepts a single char
+//TODO: Refactor tokenize a bit
 use std::fmt;
-use std::io;
 use std::i32;
 use std::str::FromStr;
 use std::hash::Hash;
+use std::collections::HashMap;
 use regex::Regex;
-
+use std::io::{stdin,stdout,Write};
 // #[derive(Debug)]
 // struct ErrInfo{
 //     instr: String,
@@ -31,6 +33,8 @@ pub enum Error{
     ParseToken,
     UnexpectedToken,
     NotAttrib,
+    UndeclaredVar,
+    None
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
@@ -76,17 +80,24 @@ impl FromStr for Operator {
     }
 }
 
-impl Operator{
-    fn to_str(&self) -> String{
-        match self{
-            Operator::Math(op) => op.to_str(),
-            Operator::Attrib => "=".to_string(),
+impl fmt::Display for MathOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MathOperator::Add => write!(f, "+"),
+            MathOperator::Subt => write!(f, "-"),
+            MathOperator::Mull => write!(f, "*"),
+            MathOperator::Div => write!(f, "/"),
         }
     }
+}
 
-    // fn apply(&self, expr1: Expr, expr2: Expr) {
-
-    // }
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Operator::Math(op) => write!(f, "{}", op),
+            Operator::Attrib => write!(f, "="),
+        }
+    }
 }
 
 impl MathOperator{
@@ -96,15 +107,6 @@ impl MathOperator{
             MathOperator::Subt => 0,
             MathOperator::Mull => 1,
             MathOperator::Div => 1
-        }
-    }
-
-    fn to_str(&self) -> String{
-        match self{
-            MathOperator::Add => "+".to_string(),
-            MathOperator::Subt => "-".to_string(),
-            MathOperator::Mull => "*".to_string(),
-            MathOperator::Div => "/".to_string(),
         }
     }
 
@@ -137,56 +139,45 @@ impl FromStr for Parenthesis {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-struct Variable{
-    name: String,
-    val: i32
-}
-
-impl FromStr for Variable{
-    type Err = Error;
-    
-    // Expects str to be the name of the variable!
-    fn from_str(s: &str) -> Result<Self, Self::Err>{
-        //TODO; How do I make this static?
-        let re = Regex::new("^[A-Za-z_][A-Za-z_0-9]*$").map_err(|e| Error::ParseToken)?;
-        if !re.is_match(s){
-            return Err(Error::ParseToken)
-        }
-        return Ok(Variable{name: s.to_string(), val: 0})
-    }
-}
-
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 enum Token {
     Val(i32),
-    Var(Variable),
+    Var(String),
     Op(Operator),
     Par(Parenthesis),
 }
 
 impl Token {
-    fn to_str(&self) -> String{
-        match self {
-            Token::Val(val) => val.to_string(),
-            Token::Var(var) => var.name.to_string(),
-            Token::Op(op) => op.to_str(),
-            Token::Par(Parenthesis::Open) => "(".to_string(),
-            Token::Par(Parenthesis::Closed) => ")".to_string(),
-        }
+
+    // Returns a token if char is by itself one(operator or parantheses), an error otherwise
+    fn parse_char(c: char) -> Result<Token, Error>{
+        let s = c.to_string();
+        s.parse::<Parenthesis>()
+            .map(Token::Par)
+            .or_else(|_| s.parse::<Operator>().map(Token::Op))
+    }
+
+    // Should be used to parse multi character tokens like values and variables
+    fn parse_str(s: &str) -> Result<Token, Error>{
+         let var_re= Regex::new("^[A-Za-z_][A-Za-z_0-9]*$").unwrap();
+         if var_re.is_match(s){
+            return Ok(Token::Var(s.to_string()));
+         }
+            
+        s.parse::<i32>().map(Token::Val).map_err(|e| Error::ParseToken)
     }
 }
 
-impl FromStr for Token {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i32>()
-            .map(Token::Val)
-            .or_else(|_| s.parse::<Parenthesis>().map(Token::Par))
-            .or_else(|_| s.parse::<Operator>().map(Token::Op))
-            .or_else(|_| s.parse::<Variable>().map(Token::Var))
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Token::Val(val) => write!(f, "{}", val),
+            Token::Var(var) => write!(f, "{}", var),
+            Token::Op(op) => write!(f, "{}", op),
+            Token::Par(Parenthesis::Open) => write!(f, "("),
+            Token::Par(Parenthesis::Closed) => write!(f, ")"),
+        }
     }
 }
 
@@ -197,11 +188,11 @@ enum ValidChar{
 
 impl ValidChar {
     fn from_char(c: char) -> Result<Self, Error> {
-        if c == ' '{
+        if c == ' ' || c == '\n' || c == '\r'{
             return Ok(ValidChar::Sep)
         }
 
-        c.to_string().parse::<Token>().map(ValidChar::TokenChar)
+        Token::parse_char(c).map(ValidChar::TokenChar)
     }
 }
 
@@ -209,66 +200,102 @@ impl ValidChar {
 fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
     let mut tokens: Vec<Token> = Vec::new();
 
-    let mut curr_nr: Option<i32> = None;
+    let mut start_i = 0;
+    for (i, c) in s.chars().enumerate() {
+        let parsed_char = ValidChar::from_char(c);
 
-    for c in s.chars() {
-        let parsed_char = ValidChar::from_char(c)?;
-
-        match parsed_char {
-            ValidChar::TokenChar(Token::Val(d)) => {
-                curr_nr = Some(curr_nr.unwrap_or(0) * 10 + d);
+        match parsed_char {    
+            Ok(ValidChar::Sep) => {
+                // Maybe we went passed a variable or value?
+                let token_str = &s[start_i..i];
+                start_i = i + 1;
+                if token_str.len() == 0{
+                    continue;
+                }
+                let token = Token::parse_str(token_str)?;
+                tokens.push(token);
             }
             
-            ValidChar::Sep => {
-                if let Some(num) = curr_nr.take() {
-                    tokens.push(Token::Val(num));
+            Ok(ValidChar::TokenChar(t)) => {
+                // Maybe we went passed a variable or value
+                let token_str = &s[start_i..i];
+                start_i = i + 1;
+                if token_str.len() == 0{
+                    // Add the single-char token
+                    tokens.push(t);
+                    continue;
                 }
-            }
-            
-            ValidChar::TokenChar(t) => {
-                if let Some(num) = curr_nr.take() {
-                    tokens.push(Token::Val(num));
-                }
+                let token = Token::parse_str(token_str)?;
+                tokens.push(token);
+
+                // Add the single-char token
                 tokens.push(t);
             }
+
+            _ => {continue;}
         }
     }
 
-    // Possibly ending with a number
-    if let Some(num) = curr_nr.take() {
-        tokens.push(Token::Val(num));
-    }
+    // Maybe the last token was multi character
+    let token_str = &s[start_i..];
+    if token_str.len() != 0{
+        let token = Token::parse_str(&s[start_i..])?;
+        tokens.push(token);
+     }
 
     Ok(tokens)
 }
 
 enum Expr{
     Math(MathExpr),
-    Attrib(Variable, MathExpr)
+    Attrib(String, MathExpr)
+}
+
+impl Expr{
+    fn eval(self, pgm_state: &mut HashMap<String, i32>) -> Result<i32, Error>{
+        match self{
+            Expr::Math(m_expr) => {m_expr.eval(pgm_state)},
+            Expr::Attrib(var, m_expr) => {
+                let right = m_expr.eval(pgm_state)?;
+                pgm_state.insert(var,  right);
+                Ok(right)
+            }
+        }
+    }
 }
 
 enum MathExpr{
     Val(i32),
-    Var(Variable),
+    Var(String),
     BinOp(MathOperator, Box<MathExpr>, Box<MathExpr>),
 }
 
-impl MathExpr{
-    fn to_str(&self) -> String{
+impl fmt::Display for MathExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MathExpr::Val(val) => {format!("{}", val.to_string())},
-            MathExpr::Var(var) => {var.name.to_string()},
-            MathExpr::BinOp(op, e1 , e2) => {
-                format!("{} ({}, {})", op.to_str(), e1.to_str(), e2.to_str())
+            MathExpr::Val(val) => write!(f, "{}", val),
+            MathExpr::Var(var) => write!(f, "{}", var),
+            MathExpr::BinOp(op, e1, e2) => {
+                write!(f, "{} ({}, {})", op, e1, e2)
             },
         }
     }
+}
 
-    fn eval(&self) -> i32{
+impl MathExpr{
+    fn eval(&self, pgm_state: &HashMap<String, i32>) -> Result<i32, Error>{
         match self{
-            MathExpr::Val(val) => {*val},
-            MathExpr::Var(var) => {var.val},
-            MathExpr::BinOp(op, e1, e2) => op.apply(e1.eval(), e2.eval())
+            MathExpr::Val(val) => {Ok(*val)},
+            MathExpr::Var(var) => {
+                pgm_state.get(var)
+                         .map(|v| *v)
+                         .ok_or(Error::UndeclaredVar)
+            },
+            MathExpr::BinOp(op, e1, e2) => {
+                let v1 = e1.eval(pgm_state)?;
+                let v2 = e2.eval(pgm_state)?;
+                Ok(op.apply(v1, v2))
+            }
         }
     }
 }
@@ -373,7 +400,6 @@ impl Parser{
     fn parse_expr(&mut self) -> Result<Expr, Error>{
         match self.parse_attrib() {
             Err(Error::NotAttrib) => {
-                print!("Not Attrrib!");
                 self.reset();
                 self.parse_math_expr().map(Expr::Math)
             }
@@ -383,26 +409,56 @@ impl Parser{
 
 }
 
+struct Interpreter{
+    pgm_state: HashMap<String, i32>
+}
+
+impl Interpreter{
+    fn new() -> Self{
+        Interpreter { pgm_state: HashMap::new() }
+    }
+
+    fn run(&mut self, instr: &str) -> Result<i32, Error>{
+        let tokens = tokenize(instr)?;
+        print_tokens(&tokens);
+        
+        let mut parser: Parser = Parser::new(tokens);
+        let expr = parser.parse_expr()?;
+        println!("[DBG]: Passed parser!");
+
+        expr.eval(&mut self.pgm_state)
+    }
+}
 
 fn print_err(err: &str){
     println!("[ERR]: {}", err);
 }
 
 fn print_tokens(tokens: &Vec<Token>){
-    print!("[DBG]: Tokens: ");
+    print!("[DBG]: Tokens: [");
     for token in tokens{
-        print!("{}", token.to_str());
+        print!("'{}', ", token);
     }
-    println!();
+    println!("]");
 }
 
 fn main() {
-    // Test tokenizer
-    let s = "a = -5";
-    let tokens = tokenize(s).ok().unwrap();
-    print_tokens(&tokens);
+    let mut interpreter: Interpreter = Interpreter::new();
+    println!("You are in the quick maths interactive shell!\n");
+    loop{
+        print!(">>");
+        
+        // Get user instruction
+        let mut instr=String::new();
+        let _ = stdout().flush();
+        stdin().read_line(&mut instr).expect("Did not enter a correct string");
+        println!("{}", instr);
 
-    let mut parser = Parser::new(tokens);
-    let expr = parser.parse_expr().ok().unwrap();
-    // println!("{}={}", expr.to_str(), expr.eval());
+        let instr_res = interpreter.run(&instr);
+        
+        match instr_res{
+            Ok(val) => {println!("{}", val)},
+            Err(e) => {print_err("Amogus")}
+        }
+    }
 }
