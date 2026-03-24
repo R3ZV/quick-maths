@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 regex = "1.12.3"
+quickcheck = "1.0"
+quickcheck_macros = "1.0"
