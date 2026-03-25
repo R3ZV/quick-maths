@@ -1,4 +1,4 @@
-// TODO: Add messages to errors!
+// TODO: Plus messages to errors!
 // TODO: Negative values will cause issues
 //      - Solution: Handle them in when evaluating
 // TODO: Floats will cause issues
@@ -31,6 +31,7 @@ use std::str::FromStr;
 pub enum Error {
     ParseToken,
     UnexpectedToken,
+    ValOutOfBounds,
     NotAttrib,
     UndeclaredVar,
     None,
@@ -38,8 +39,8 @@ pub enum Error {
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum MathOperator {
-    Add,
-    Subt,
+    Plus,
+    Minus,
     Mull,
     Div,
 }
@@ -49,8 +50,8 @@ impl FromStr for MathOperator {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "+" => Ok(MathOperator::Add),
-            "-" => Ok(MathOperator::Subt),
+            "+" => Ok(MathOperator::Plus),
+            "-" => Ok(MathOperator::Minus),
             "*" => Ok(MathOperator::Mull),
             "/" => Ok(MathOperator::Div),
             _ => Err(Error::ParseToken),
@@ -80,8 +81,8 @@ impl FromStr for Operator {
 impl fmt::Display for MathOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MathOperator::Add => write!(f, "+"),
-            MathOperator::Subt => write!(f, "-"),
+            MathOperator::Plus => write!(f, "+"),
+            MathOperator::Minus => write!(f, "-"),
             MathOperator::Mull => write!(f, "*"),
             MathOperator::Div => write!(f, "/"),
         }
@@ -100,8 +101,8 @@ impl fmt::Display for Operator {
 impl MathOperator {
     fn get_precedence(&self) -> i32 {
         match self {
-            MathOperator::Add => 0,
-            MathOperator::Subt => 0,
+            MathOperator::Plus => 0,
+            MathOperator::Minus => 0,
             MathOperator::Mull => 1,
             MathOperator::Div => 1,
         }
@@ -109,8 +110,8 @@ impl MathOperator {
 
     fn apply(&self, val1: i32, val2: i32) -> i32 {
         match self {
-            MathOperator::Add => val1 + val2,
-            MathOperator::Subt => val1 - val2,
+            MathOperator::Plus => val1 + val2,
+            MathOperator::Minus => val1 - val2,
             MathOperator::Mull => val1 * val2,
             MathOperator::Div => val1 / val2,
         }
@@ -159,9 +160,13 @@ impl Token {
             return Ok(Token::Var(s.to_string()));
         }
 
+        let val_re = Regex::new("^[1-9][0-9]*$").unwrap();
         s.parse::<i32>()
             .map(Token::Val)
-            .map_err(|_| Error::ParseToken)
+            .map_err(|_| 
+                if val_re.is_match(s){Error::ValOutOfBounds}
+                else{Error::ParseToken}
+            )
     }
 }
 
@@ -194,6 +199,7 @@ impl ValidChar {
 
 // TODO: Handle floats as well
 fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
+    println!("[DBG]: tokenize: {}", s);
     let mut tokens: Vec<Token> = Vec::new();
 
     let mut start_i = 0;
@@ -213,18 +219,18 @@ fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
             }
 
             Ok(ValidChar::TokenChar(t)) => {
-                // Maybe we went passed a variable or value
+                // Maybe we went past a variable or value
                 let token_str = &s[start_i..i];
                 start_i = i + 1;
                 if token_str.is_empty() {
-                    // Add the single-char token
+                    // Plus the single-char token
                     tokens.push(t);
                     continue;
                 }
                 let token = Token::parse_str(token_str)?;
                 tokens.push(token);
 
-                // Add the single-char token
+                // Plus the single-char token
                 tokens.push(t);
             }
 
@@ -266,6 +272,7 @@ enum MathExpr {
     Val(i32),
     Var(String),
     BinOp(MathOperator, Box<MathExpr>, Box<MathExpr>),
+    UnMinus(Box<MathExpr>)
 }
 
 impl fmt::Display for MathExpr {
@@ -276,6 +283,7 @@ impl fmt::Display for MathExpr {
             MathExpr::BinOp(op, e1, e2) => {
                 write!(f, "{} ({}, {})", op, e1, e2)
             }
+            MathExpr::UnMinus(e) => write!(f, "-{}", e),
         }
     }
 }
@@ -289,6 +297,9 @@ impl MathExpr {
                 let v1 = e1.eval(pgm_state)?;
                 let v2 = e2.eval(pgm_state)?;
                 Ok(op.apply(v1, v2))
+            }
+            MathExpr::UnMinus(e) => {
+                Ok(-e.eval(pgm_state)?)
             }
         }
     }
@@ -339,8 +350,19 @@ impl Parser {
         }
     }
 
+    fn parse_factor(&mut self) -> Result<MathExpr, Error>{
+        match self.current(){
+            Some(Token::Op(Operator::Math(MathOperator::Minus))) => {
+                self.consume();
+                Ok(MathExpr::UnMinus(Box::new(self.parse_primary()?)))
+            }
+            None => {Err(Error::ParseToken)}
+            _ => self.parse_primary()
+        }
+    }
+
     fn parse_bin(&mut self, left: MathExpr, op: MathOperator) -> Result<MathExpr, Error> {
-        let mut right = self.parse_primary()?;
+        let mut right = self.parse_factor()?;
 
         loop {
             let token = self.current();
@@ -366,7 +388,7 @@ impl Parser {
     }
 
     fn parse_math_expr(&mut self) -> Result<MathExpr, Error> {
-        let mut left = self.parse_primary()?;
+        let mut left = self.parse_factor()?;
         loop {
             let token = self.current();
             match token {
@@ -457,7 +479,13 @@ fn main() {
         stdin()
             .read_line(&mut instr)
             .expect("Did not enter a correct string");
-        println!("{}", instr);
+        
+        // println!("[DBG]: {}", instr);
+        
+        if instr == "q"{
+            println!("Exiting...");
+            return;
+        }
 
         let instr_res = interpreter.run(&instr);
 
@@ -490,7 +518,7 @@ mod tests {
     }
 
     #[quickcheck]
-    fn prop_addition_is_commutative(a: i32, b: i32) -> TestResult {
+    fn prop_Plusition_is_commutative(a: i32, b: i32) -> TestResult {
         if a.checked_add(b).is_none() {
             return TestResult::discard();
         }
