@@ -5,69 +5,50 @@ use std::str::FromStr;
 use crate::error::Error;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum MathOperator {
+
+pub enum Operator {
     // Arithmetic
     Plus,
     Minus,
     Mull,
     Div,
 
-    // Comparison
+    // Comparison(TODO: Add <=, >= and !=)
     Less,
     Greater,
-    Equal
+    Equal,
+
+    // Logical operators
+    And,
+    Or,
+    Not,
+
+    // Assigment operator
+    Assign
 }
 
-
-impl FromStr for MathOperator {
-    type Err = Error; // We must specify the error type
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "+" => Ok(MathOperator::Plus),
-            "-" => Ok(MathOperator::Minus),
-            "*" => Ok(MathOperator::Mull),
-            "/" => Ok(MathOperator::Div),
-            "<" => Ok(MathOperator::Less),
-            ">" => Ok(MathOperator::Greater),
-            "==" => Ok(MathOperator::Equal),
-            _ => Err(Error::ParseToken),
-        }
-    }
-}
-
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum Operator {
-    Math(MathOperator),
-    Attrib,
-}
 
 impl FromStr for Operator {
     type Err = Error; // We must specify the error type
 
-    // The order matters here, multiline chars should come before the single line
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<MathOperator>()
-            .map(Operator::Math)
-            .or_else(|_| match s {
-                "=" => Ok(Operator::Attrib),
-                _ => Err(Error::ParseToken),
-            })
-    }
-}
+        match s {
+            "+" => Ok(Operator::Plus),
+            "-" => Ok(Operator::Minus),
+            "*" => Ok(Operator::Mull),
+            "/" => Ok(Operator::Div),
 
+            "<" => Ok(Operator::Less),
+            ">" => Ok(Operator::Greater),
+            "==" => Ok(Operator::Equal),
 
-impl fmt::Display for MathOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MathOperator::Plus => write!(f, "+"),
-            MathOperator::Minus => write!(f, "-"),
-            MathOperator::Mull => write!(f, "*"),
-            MathOperator::Div => write!(f, "/"),
-            MathOperator::Less => write!(f, "<"),
-            MathOperator::Greater => write!(f, ">"),
-            MathOperator::Equal => write!(f, "=="),
+            "&" => Ok(Operator::And),
+            "|" => Ok(Operator::Or),
+            "!" => Ok(Operator::Not),
+
+            "=" => Ok(Operator::Assign),
+            
+            _ => Err(Error::ParseToken),
         }
     }
 }
@@ -75,38 +56,24 @@ impl fmt::Display for MathOperator {
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Operator::Math(op) => write!(f, "{}", op),
-            Operator::Attrib => write!(f, "="),
+            Operator::Plus => write!(f, "+"),
+            Operator::Minus => write!(f, "-"),
+            Operator::Mull => write!(f, "*"),
+            Operator::Div => write!(f, "/"),
+
+            Operator::Less => write!(f, "<"),
+            Operator::Greater => write!(f, ">"),
+            Operator::Equal => write!(f, "=="),
+
+            Operator::And => write!(f, "&"),
+            Operator::Or => write!(f, "|"),
+            Operator::Not => write!(f, "!"),
+
+            Operator::Assign => write!(f, "="),
         }
     }
 }
 
-impl MathOperator {
-    pub fn get_precedence(&self) -> i32 {
-        match self {
-            MathOperator::Equal => 0,
-            MathOperator::Less => 1,
-            MathOperator::Greater => 1,
-            MathOperator::Plus => 2,
-            MathOperator::Minus => 2,
-            MathOperator::Mull => 3,
-            MathOperator::Div => 3,
-        }
-    }
-
-    // TODO: Should make the difference between numeric and boolean values
-    pub fn apply(&self, val1: i32, val2: i32) -> i32 {
-        match self {
-            MathOperator::Plus => val1 + val2,
-            MathOperator::Minus => val1 - val2,
-            MathOperator::Mull => val1 * val2,
-            MathOperator::Div => val1 / val2,
-            MathOperator::Less => (val1 < val2) as i32,
-            MathOperator::Greater => (val1 > val2) as i32,
-            MathOperator::Equal => (val1 == val2) as i32,
-        }
-    }
-}
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Parenthesis {
@@ -212,14 +179,14 @@ pub fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
                 tokens.push(token);
             }
             // Special case for = as it might be ==
-            Ok(ValidChar::TokenChar(Token::Op(Operator::Attrib))) => {
+            Ok(ValidChar::TokenChar(Token::Op(Operator::Assign))) => {
                 let token_str = &s[start_i..i];
                 start_i = i + 1;
-                let mut op = Token::Op(Operator::Attrib);
+                let mut op = Token::Op(Operator::Assign);
 
                 if let Some(&(next_i, next_c)) = iter.peek(){
                     if next_c == '=' {
-                        op = Token::Op(Operator::Math(MathOperator::Equal));
+                        op = Token::Op(Operator::Equal);
                         start_i += 1;
                         iter.next();
                     }

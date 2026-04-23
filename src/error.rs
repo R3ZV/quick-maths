@@ -3,9 +3,9 @@ pub enum Error {
     ParseToken,
     UnexpectedToken,
     ValOutOfBounds,
-    NotAttrib,
-    NotComp,
+    NotAssign,
     UndeclaredVar,
-    InvalidOp,
+    InvalidBinOp,
+    InvalidUnaryOp,
     None,
 }
