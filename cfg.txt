@@ -1,4 +1,6 @@
 S -> A | E
 A -> VAR = E
-E -> E op E | P | -P
+ 
+E -> E op E | U
+U -> !U | -U | P
 P -> (E) | VAL | VAR

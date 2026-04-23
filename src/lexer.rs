@@ -6,11 +6,18 @@ use crate::error::Error;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum MathOperator {
+    // Arithmetic
     Plus,
     Minus,
     Mull,
     Div,
+
+    // Comparison
+    Less,
+    Greater,
+    Equal
 }
+
 
 impl FromStr for MathOperator {
     type Err = Error; // We must specify the error type
@@ -21,10 +28,14 @@ impl FromStr for MathOperator {
             "-" => Ok(MathOperator::Minus),
             "*" => Ok(MathOperator::Mull),
             "/" => Ok(MathOperator::Div),
+            "<" => Ok(MathOperator::Less),
+            ">" => Ok(MathOperator::Greater),
+            "==" => Ok(MathOperator::Equal),
             _ => Err(Error::ParseToken),
         }
     }
 }
+
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Operator {
@@ -35,6 +46,7 @@ pub enum Operator {
 impl FromStr for Operator {
     type Err = Error; // We must specify the error type
 
+    // The order matters here, multiline chars should come before the single line
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.parse::<MathOperator>()
             .map(Operator::Math)
@@ -45,6 +57,7 @@ impl FromStr for Operator {
     }
 }
 
+
 impl fmt::Display for MathOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -52,6 +65,9 @@ impl fmt::Display for MathOperator {
             MathOperator::Minus => write!(f, "-"),
             MathOperator::Mull => write!(f, "*"),
             MathOperator::Div => write!(f, "/"),
+            MathOperator::Less => write!(f, "<"),
+            MathOperator::Greater => write!(f, ">"),
+            MathOperator::Equal => write!(f, "=="),
         }
     }
 }
@@ -68,19 +84,26 @@ impl fmt::Display for Operator {
 impl MathOperator {
     pub fn get_precedence(&self) -> i32 {
         match self {
-            MathOperator::Plus => 0,
-            MathOperator::Minus => 0,
-            MathOperator::Mull => 1,
-            MathOperator::Div => 1,
+            MathOperator::Equal => 0,
+            MathOperator::Less => 1,
+            MathOperator::Greater => 1,
+            MathOperator::Plus => 2,
+            MathOperator::Minus => 2,
+            MathOperator::Mull => 3,
+            MathOperator::Div => 3,
         }
     }
 
+    // TODO: Should make the difference between numeric and boolean values
     pub fn apply(&self, val1: i32, val2: i32) -> i32 {
         match self {
             MathOperator::Plus => val1 + val2,
             MathOperator::Minus => val1 - val2,
             MathOperator::Mull => val1 * val2,
             MathOperator::Div => val1 / val2,
+            MathOperator::Less => (val1 < val2) as i32,
+            MathOperator::Greater => (val1 > val2) as i32,
+            MathOperator::Equal => (val1 == val2) as i32,
         }
     }
 }
@@ -120,7 +143,7 @@ impl Token {
             .or_else(|_| s.parse::<Operator>().map(Token::Op))
     }
 
-    // Should be used to parse multi character tokens like values and variables
+    // Should be used to parse multi character tokens like values, variables
     fn parse_str(s: &str) -> Result<Token, Error> {
         let var_re = Regex::new("^[A-Za-z_][A-Za-z_0-9]*$").unwrap();
         if var_re.is_match(s) {
@@ -165,13 +188,16 @@ impl ValidChar {
     }
 }
 
+
 // TODO: Handle floats as well
 pub fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
     println!("[DBG]: tokenize: {}", s);
     let mut tokens: Vec<Token> = Vec::new();
 
     let mut start_i = 0;
-    for (i, c) in s.char_indices() {
+    let mut iter = s.char_indices().peekable();
+    
+    while let Some((i, c)) = iter.next() {
         let parsed_char = ValidChar::from_char(c);
 
         match parsed_char {
@@ -184,6 +210,32 @@ pub fn tokenize(s: &str) -> Result<Vec<Token>, Error> {
                 }
                 let token = Token::parse_str(token_str)?;
                 tokens.push(token);
+            }
+            // Special case for = as it might be ==
+            Ok(ValidChar::TokenChar(Token::Op(Operator::Attrib))) => {
+                let token_str = &s[start_i..i];
+                start_i = i + 1;
+                let mut op = Token::Op(Operator::Attrib);
+
+                if let Some(&(next_i, next_c)) = iter.peek(){
+                    if next_c == '=' {
+                        op = Token::Op(Operator::Math(MathOperator::Equal));
+                        start_i += 1;
+                        iter.next();
+                    }
+                }
+
+                if token_str.is_empty() {
+                    // Plus the single-char token
+                    tokens.push(op);
+                    continue;
+                }
+
+                let token = Token::parse_str(token_str)?;
+                tokens.push(token);
+
+                // Plus the single-char token
+                tokens.push(op);
             }
 
             Ok(ValidChar::TokenChar(t)) => {

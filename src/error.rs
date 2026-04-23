@@ -4,6 +4,8 @@ pub enum Error {
     UnexpectedToken,
     ValOutOfBounds,
     NotAttrib,
+    NotComp,
     UndeclaredVar,
+    InvalidOp,
     None,
 }
