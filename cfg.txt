@@ -3,4 +3,5 @@ A -> VAR = E
 
 E -> E bop E | U
 U -> uop U | P
-P -> (E) | VAR | NUM | TRUE | FALSE
+P -> (E) | VAR | VAL
+VAL -> NUM | TRUE | FALSE

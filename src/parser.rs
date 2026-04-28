@@ -40,8 +40,11 @@ pub enum BinaryOp{
 
     // Comparison(TODO: Add <=, >= and !=)
     Less,
+    LessEq,
     Greater,
+    GreaterEq,
     Equal,
+    NotEqual,
 
     // Logical operators
     And,
@@ -59,8 +62,11 @@ impl TryFrom<Operator> for BinaryOp {
             Operator::Div => Ok(BinaryOp::Div),
 
             Operator::Less => Ok(BinaryOp::Less),
+            Operator::LessEq => Ok(BinaryOp::LessEq),
             Operator::Greater => Ok(BinaryOp::Greater),
+            Operator::GreaterEq => Ok(BinaryOp::GreaterEq),
             Operator::Equal => Ok(BinaryOp::Equal),
+            Operator::NotEqual => Ok(BinaryOp::NotEqual),
 
             Operator::And => Ok(BinaryOp::And),
             Operator::Or => Ok(BinaryOp::Or),
@@ -77,8 +83,11 @@ impl BinaryOp {
             BinaryOp::And => 1,
 
             BinaryOp::Equal => 2,
+            BinaryOp::NotEqual => 2,
             BinaryOp::Less => 3,
             BinaryOp::Greater => 3,
+            BinaryOp::LessEq => 3,
+            BinaryOp::GreaterEq => 3,
 
             BinaryOp::Plus => 4,
             BinaryOp::Minus => 4,
@@ -95,8 +104,11 @@ impl BinaryOp {
             (BinaryOp::Div, Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
 
             (BinaryOp::Less, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
+            (BinaryOp::LessEq, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
             (BinaryOp::Greater, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
+            (BinaryOp::GreaterEq, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
             (BinaryOp::Equal, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
+            (BinaryOp::NotEqual, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a != b)),
 
             (BinaryOp::Or, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
             (BinaryOp::And, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a && b)),
@@ -165,7 +177,6 @@ impl Parser {
         }
     }
 
-    // TODO: Colapse parse_binary and parse_math_expr into one(as Pratt parsing normally does)
     fn parse_binary(&mut self, left: MathExpr, op: BinaryOp) -> Result<MathExpr, Error> {
         let mut right = self.parse_unary()?;
 

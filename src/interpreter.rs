@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::error::Error;
 use crate::common::{Value};
-use crate::lexer::{print_tokens, tokenize};
+use crate::lexer::{Lexer, print_tokens};
 use crate::parser::Parser;
 
 pub struct Interpreter {
@@ -17,12 +17,12 @@ impl Interpreter {
     }
 
     pub fn run(&mut self, instr: &str) -> Result<Value, Error> {
-        let tokens = tokenize(instr)?;
+        let mut lexer = Lexer::new(instr);
+        let tokens = lexer.tokenize()?;
         print_tokens(&tokens);
 
         let mut parser: Parser = Parser::new(tokens);
         let expr = parser.parse_expr()?;
-        println!("[DBG]: Passed parser!");
 
         expr.eval(&mut self.pgm_state)
     }
@@ -40,7 +40,8 @@ mod tests {
 
     #[quickcheck]
     fn prop_tokenizer_never_panics(input: String) -> bool {
-        let _ = tokenize(&input);
+        let mut lexer = Lexer::new(input.as_str());
+        let _ = lexer.tokenize();
         true
     }
 
