@@ -7,5 +7,6 @@ pub enum Error {
     UndeclaredVar,
     InvalidBinOp,
     InvalidUnaryOp,
+    TypeMismatch,
     None,
 }

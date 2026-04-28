@@ -13,7 +13,9 @@ mod error;
 mod interpreter;
 mod lexer;
 mod parser;
+mod common;
 
+// use lexer::{tokenize, print_tokens};
 use std::io::{Write, stdin, stdout};
 
 use interpreter::Interpreter;
@@ -23,6 +25,8 @@ fn print_err(err: &str) {
 }
 
 fn main() {
+    // let x = "true & false";
+    // print_tokens(&tokenize(x).unwrap());
     let mut interpreter: Interpreter = Interpreter::new();
     println!("You are in the quick maths interactive shell!\n");
     loop {

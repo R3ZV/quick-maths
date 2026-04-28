@@ -3,6 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::Error;
+use crate::common::{Value};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 
@@ -95,7 +96,7 @@ impl FromStr for Parenthesis {
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum Token {
-    Val(i32),
+    Val(Value),
     Var(String),
     Op(Operator),
     Par(Parenthesis),
@@ -112,19 +113,28 @@ impl Token {
 
     // Should be used to parse multi character tokens like values, variables
     fn parse_str(s: &str) -> Result<Token, Error> {
+        // First try to convert to true or false to not mistake it for a variable
+        if let Ok(b) = s.parse::<bool>(){
+            return Ok(Token::Val(Value::Bool(b)))
+        }
+
+        // Variables
         let var_re = Regex::new("^[A-Za-z_][A-Za-z_0-9]*$").unwrap();
         if var_re.is_match(s) {
             return Ok(Token::Var(s.to_string()));
         }
 
+        // Numeric values
         let val_re = Regex::new("^[1-9][0-9]*$").unwrap();
-        s.parse::<i32>().map(Token::Val).map_err(|_| {
-            if val_re.is_match(s) {
-                Error::ValOutOfBounds
-            } else {
-                Error::ParseToken
-            }
-        })
+        s.parse::<i32>()
+            .map(|n| Token::Val(Value::Int(n))) 
+            .map_err(|_| {
+                if val_re.is_match(s) {
+                    Error::ValOutOfBounds
+                } else {
+                    Error::ParseToken
+                }
+            })
     }
 }
 

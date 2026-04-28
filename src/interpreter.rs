@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use crate::error::Error;
+use crate::common::{Value};
 use crate::lexer::{print_tokens, tokenize};
 use crate::parser::Parser;
 
 pub struct Interpreter {
-    pgm_state: HashMap<String, i32>,
+    pgm_state: HashMap<String, Value>,
 }
 
 impl Interpreter {
@@ -15,7 +16,7 @@ impl Interpreter {
         }
     }
 
-    pub fn run(&mut self, instr: &str) -> Result<i32, Error> {
+    pub fn run(&mut self, instr: &str) -> Result<Value, Error> {
         let tokens = tokenize(instr)?;
         print_tokens(&tokens);
 
