@@ -1,11 +1,11 @@
 // TODO: Add messages to errors!
 
 mod ast;
+mod common;
 mod error;
 mod interpreter;
 mod lexer;
 mod parser;
-mod common;
 
 use std::io::{Write, stdin, stdout};
 

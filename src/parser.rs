@@ -1,9 +1,9 @@
 use crate::ast::{Expr, MathExpr};
+use crate::common::Value;
 use crate::error::Error;
 use crate::lexer::{Operator, Parenthesis, Token};
-use crate::common::Value;
 
-pub enum UnaryOp{
+pub enum UnaryOp {
     Not,
     Minus,
 }
@@ -16,22 +16,22 @@ impl TryFrom<Operator> for UnaryOp {
             Operator::Minus => Ok(UnaryOp::Minus),
             Operator::Not => Ok(UnaryOp::Not),
 
-            _ => Err(Error::InvalidUnaryOp)
+            _ => Err(Error::InvalidUnaryOp),
         }
     }
 }
 
-impl UnaryOp{
+impl UnaryOp {
     pub fn apply(&self, val: Value) -> Result<Value, Error> {
-        match (self, val){
+        match (self, val) {
             (UnaryOp::Minus, Value::Int(v)) => Ok(Value::Int(-v)),
             (UnaryOp::Minus, Value::Bool(v)) => Ok(Value::Bool(!v)),
-            _ => Err(Error::TypeMismatch) 
+            _ => Err(Error::TypeMismatch),
         }
     }
 }
 
-pub enum BinaryOp{
+pub enum BinaryOp {
     // Arithmetic
     Plus,
     Minus,
@@ -71,7 +71,7 @@ impl TryFrom<Operator> for BinaryOp {
             Operator::And => Ok(BinaryOp::And),
             Operator::Or => Ok(BinaryOp::Or),
 
-            _ => Err(Error::InvalidBinOp)
+            _ => Err(Error::InvalidBinOp),
         }
     }
 }
@@ -113,7 +113,7 @@ impl BinaryOp {
             (BinaryOp::Or, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a || b)),
             (BinaryOp::And, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a && b)),
 
-            _ => {Err(Error::TypeMismatch)}
+            _ => Err(Error::TypeMismatch),
         }
     }
 }
@@ -164,11 +164,11 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Result<MathExpr, Error> {
-        if let Some(Token::Op(op)) = self.current() {
-            if let Ok(un_op) = UnaryOp::try_from(op) {
-                self.consume();
-                return Ok(MathExpr::UnaryOp(un_op, Box::new(self.parse_unary()?)));
-            }
+        if let Some(Token::Op(op)) = self.current()
+            && let Ok(un_op) = UnaryOp::try_from(op)
+        {
+            self.consume();
+            return Ok(MathExpr::UnaryOp(un_op, Box::new(self.parse_unary()?)));
         }
 
         match self.current() {
@@ -180,17 +180,16 @@ impl Parser {
     fn parse_binary(&mut self, left: MathExpr, op: BinaryOp) -> Result<MathExpr, Error> {
         let mut right = self.parse_unary()?;
 
-        while let Some(Token::Op(next_op)) = self.current(){
-            if let Ok(next_op) = BinaryOp::try_from(next_op){
+        while let Some(Token::Op(next_op)) = self.current() {
+            if let Ok(next_op) = BinaryOp::try_from(next_op) {
                 if next_op.get_precedence() > op.get_precedence() {
-                        self.consume();
-                        right = self.parse_binary(right, next_op)?;
+                    self.consume();
+                    right = self.parse_binary(right, next_op)?;
                 } else {
                     break;
                 }
-            }
-            else{
-                return Err(Error::UnexpectedToken)
+            } else {
+                return Err(Error::UnexpectedToken);
             }
         }
 
@@ -200,13 +199,12 @@ impl Parser {
     fn parse_math_expr(&mut self) -> Result<MathExpr, Error> {
         let mut left = self.parse_unary()?;
 
-        while let Some(Token::Op(op)) = self.current(){
-            if let Ok(bin_op) = BinaryOp::try_from(op){
+        while let Some(Token::Op(op)) = self.current() {
+            if let Ok(bin_op) = BinaryOp::try_from(op) {
                 self.consume();
                 left = self.parse_binary(left, bin_op)?;
-            }
-            else{
-                return Err(Error::UnexpectedToken)
+            } else {
+                return Err(Error::UnexpectedToken);
             }
         }
         Ok(left)

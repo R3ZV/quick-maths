@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use crate::common::Value;
 use crate::error::Error;
-use crate::common::{Value};
 use crate::lexer::{Lexer, print_tokens};
 use crate::parser::Parser;
 
@@ -60,10 +60,13 @@ mod tests {
 
         let mut interp = Interpreter::new();
 
-        let expr1 = format!("{} + {}", a, b);
-        let expr2 = format!("{} + {}", b, a);
+        let expr1 = format!("{} + {}\n", a, b);
+        let expr2 = format!("{} + {}\n", b, a);
 
+        eprintln!("Evaluating: {}", expr1);
         let res1 = interp.run(&expr1).unwrap();
+
+        eprintln!("Evaluating: {}", expr2);
         let res2 = interp.run(&expr2).unwrap();
 
         TestResult::from_bool(res1 == res2)
@@ -94,8 +97,8 @@ mod tests {
 
         let mut interp = Interpreter::new();
 
-        let expr1 = format!("({} + {}) + {}", a, b, c);
-        let expr2 = format!("{} + ({} + {})", a, b, c);
+        let expr1 = format!("({} + {}) + {}\n", a, b, c);
+        let expr2 = format!("{} + ({} + {})\n", a, b, c);
 
         let res1 = interp.run(&expr1).unwrap();
         let res2 = interp.run(&expr2).unwrap();
@@ -110,13 +113,13 @@ mod tests {
         }
 
         let mut interp = Interpreter::new();
-        let expr1 = format!("{} + 0", a);
-        let expr2 = format!("0 + {}", a);
+        let expr1 = format!("{} + 0\n", a);
+        let expr2 = format!("0 + {}\n", a);
 
         let res1 = interp.run(&expr1).unwrap();
         let res2 = interp.run(&expr2).unwrap();
 
-        TestResult::from_bool(res1 == a && res2 == a)
+        TestResult::from_bool(res1 == Value::Int(a) && res2 == Value::Int(a))
     }
 
     #[quickcheck]
@@ -130,8 +133,8 @@ mod tests {
 
         let mut interp = Interpreter::new();
 
-        let expr1 = format!("{} * {}", a, b);
-        let expr2 = format!("{} * {}", b, a);
+        let expr1 = format!("{} * {}\n", a, b);
+        let expr2 = format!("{} * {}\n", b, a);
 
         let res1 = interp.run(&expr1).unwrap();
         let res2 = interp.run(&expr2).unwrap();
@@ -164,8 +167,8 @@ mod tests {
 
         let mut interp = Interpreter::new();
 
-        let expr1 = format!("({} * {}) * {}", a, b, c);
-        let expr2 = format!("{} * ({} * {})", a, b, c);
+        let expr1 = format!("({} * {}) * {}\n", a, b, c);
+        let expr2 = format!("{} * ({} * {})\n", a, b, c);
 
         let res1 = interp.run(&expr1).unwrap();
         let res2 = interp.run(&expr2).unwrap();
@@ -201,8 +204,8 @@ mod tests {
 
         let mut interp = Interpreter::new();
 
-        let expr1 = format!("{} * ({} + {})", a, b, c);
-        let expr2 = format!("{} * {} + {} * {}", a, b, a, c);
+        let expr1 = format!("{} * ({} + {})\n", a, b, c);
+        let expr2 = format!("{} * {} + {} * {}\n", a, b, a, c);
 
         let res1 = interp.run(&expr1).unwrap();
         let res2 = interp.run(&expr2).unwrap();
@@ -217,10 +220,10 @@ mod tests {
         }
 
         let mut interp = Interpreter::new();
-        let expr = format!("{} - {}", a, a);
+        let expr = format!("{} - {}\n", a, a);
         let res = interp.run(&expr).unwrap();
 
-        TestResult::from_bool(res == 0)
+        TestResult::from_bool(res == Value::Int(0))
     }
 
     #[quickcheck]
@@ -231,9 +234,98 @@ mod tests {
         }
 
         let mut interp = Interpreter::new();
-        let expr = format!("{} / {}", a, a);
+        let expr = format!("{} / {}\n", a, a);
         let res = interp.run(&expr).unwrap();
 
-        TestResult::from_bool(res == 1)
+        TestResult::from_bool(res == Value::Int(1))
+    }
+    #[quickcheck]
+    fn prop_less_than_or_equal_reflexive(a: i32) -> TestResult {
+        if !is_parseable(a) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+        let expr = format!("{} <= {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(true))
+    }
+
+    #[quickcheck]
+    fn prop_greater_than_or_equal_reflexive(a: i32) -> TestResult {
+        if !is_parseable(a) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+        let expr = format!("{} >= {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(true))
+    }
+
+    #[quickcheck]
+    fn prop_not_equal_irreflexive(a: i32) -> TestResult {
+        if !is_parseable(a) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+        let expr = format!("{} != {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_not_equal_symmetric(a: i32, b: i32) -> TestResult {
+        if !is_parseable(a) || !is_parseable(b) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("{} != {}\n", a, b);
+        let expr2 = format!("{} != {}\n", b, a);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_less_eq_and_greater_eq_mirror(a: i32, b: i32) -> TestResult {
+        if !is_parseable(a) || !is_parseable(b) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("{} <= {}\n", a, b);
+        let expr2 = format!("{} >= {}\n", b, a);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_less_than_or_equal_transitive(a: i32, b: i32, c: i32) -> TestResult {
+        if !is_parseable(a) || !is_parseable(b) || !is_parseable(c) {
+            return TestResult::discard();
+        }
+
+        if a <= b && b <= c {
+            let mut interp = Interpreter::new();
+            let expr = format!("{} <= {}\n", a, c);
+            let res = interp.run(&expr).unwrap();
+
+            TestResult::from_bool(res == Value::Bool(true))
+        } else {
+            TestResult::discard()
+        }
     }
 }

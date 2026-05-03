@@ -1,10 +1,10 @@
 use regex::Regex;
 use std::fmt;
-use std::str::FromStr;
 use std::str;
+use std::str::FromStr;
 
+use crate::common::Value;
 use crate::error::Error;
-use crate::common::{Value};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 
@@ -28,9 +28,8 @@ pub enum Operator {
     Not,
 
     // Assigment operator
-    Assign
+    Assign,
 }
-
 
 impl FromStr for Operator {
     type Err = Error; // We must specify the error type
@@ -54,7 +53,7 @@ impl FromStr for Operator {
             "!" => Ok(Operator::Not),
 
             "=" => Ok(Operator::Assign),
-            
+
             _ => Err(Error::ParseToken),
         }
     }
@@ -83,7 +82,6 @@ impl fmt::Display for Operator {
         }
     }
 }
-
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Parenthesis {
@@ -123,8 +121,8 @@ impl Token {
     // Should be used to parse multi character tokens like values, variables
     fn parse_str(s: &str) -> Result<Token, Error> {
         // First try to convert to true or false to not mistake it for a variable
-        if let Ok(b) = s.parse::<bool>(){
-            return Ok(Token::Val(Value::Bool(b)))
+        if let Ok(b) = s.parse::<bool>() {
+            return Ok(Token::Val(Value::Bool(b)));
         }
 
         // Variables
@@ -132,11 +130,11 @@ impl Token {
         if var_re.is_match(s) {
             return Ok(Token::Var(s.to_string()));
         }
-        
+
         // Numeric values
         let val_re = Regex::new("^[1-9][0-9]*$").unwrap();
         s.parse::<i32>()
-            .map(|n| Token::Val(Value::Int(n))) 
+            .map(|n| Token::Val(Value::Int(n)))
             .map_err(|_| {
                 if val_re.is_match(s) {
                     Error::ValOutOfBounds
@@ -148,13 +146,13 @@ impl Token {
 
     // Tries to extend self to a multichar token, if it fails it returns itself
     // Ex: > becomes >=, ! becomes !=
-    fn try_single_char_to_multi(&self) -> Token{
-        match self{
+    fn try_single_char_to_multi(&self) -> Token {
+        match self {
             Token::Op(Operator::Greater) => Token::Op(Operator::GreaterEq),
             Token::Op(Operator::Less) => Token::Op(Operator::LessEq),
             Token::Op(Operator::Not) => Token::Op(Operator::NotEqual),
             Token::Op(Operator::Assign) => Token::Op(Operator::Equal),
-            _ => self.clone()
+            _ => self.clone(),
         }
     }
 }
@@ -187,32 +185,35 @@ impl ValidChar {
     }
 }
 
-
 pub struct Lexer {
     s: Vec<u8>,
     str_start_i: usize,
-    cursor : usize,
+    cursor: usize,
 }
 
-impl Lexer{
-    pub fn new(s: &str) -> Lexer{
-        Lexer { s : s.to_string().into_bytes(), str_start_i : 0, cursor : 0}
+impl Lexer {
+    pub fn new(s: &str) -> Lexer {
+        Lexer {
+            s: s.to_string().into_bytes(),
+            str_start_i: 0,
+            cursor: 0,
+        }
     }
 
-    pub fn consume_str(&mut self) -> Option<&[u8]>{
-        if self.str_start_i >= self.cursor - 1{
+    pub fn consume_str(&mut self) -> Option<&[u8]> {
+        if self.cursor == 0 || self.str_start_i + 1 >= self.cursor {
             self.str_start_i = self.cursor;
-            return None
+            return None;
         }
 
         let token_str = &self.s[self.str_start_i..self.cursor - 1];
         self.str_start_i = self.cursor;
-    
-        return Some(token_str);
+
+        Some(token_str)
     }
 
-    pub fn consume(&mut self) -> Option<u8>{
-        if self.cursor >= self.s.len(){
+    pub fn consume(&mut self) -> Option<u8> {
+        if self.cursor >= self.s.len() {
             return None;
         }
 
@@ -221,11 +222,11 @@ impl Lexer{
         ret
     }
 
-    pub fn peek(&mut self) -> Option<u8>{
-        if self.cursor >= self.s.len(){
+    pub fn peek(&mut self) -> Option<u8> {
+        if self.cursor >= self.s.len() {
             return None;
         }
-        return Some(self.s[self.cursor]);
+        Some(self.s[self.cursor])
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, Error> {
@@ -235,22 +236,27 @@ impl Lexer{
             let parsed_char = ValidChar::from_char(c as char);
             match parsed_char {
                 Ok(ValidChar::Sep) => {
-                    if let Some(token_str) = self.consume_str(){
-                        let token = Token::parse_str(unsafe { str::from_utf8_unchecked(token_str)})?;
+                    if let Some(token_str) = self.consume_str() {
+                        let token =
+                            Token::parse_str(unsafe { str::from_utf8_unchecked(token_str) })?;
                         tokens.push(token);
                     }
                 }
 
                 Ok(ValidChar::TokenChar(mut curr_token)) => {
                     // Maybe we went past a variable or value
-                    if let Some(passed_token_str) = self.consume_str(){
-                        let passed_token = Token::parse_str(unsafe { str::from_utf8_unchecked(passed_token_str)})?;
+                    if let Some(passed_token_str) = self.consume_str() {
+                        let passed_token = Token::parse_str(unsafe {
+                            str::from_utf8_unchecked(passed_token_str)
+                        })?;
                         tokens.push(passed_token);
                     }
 
                     // Change the token to multichar if needed
                     let next_c = self.peek();
-                    if let Some(next_c) = next_c && next_c == b'=' {
+                    if let Some(next_c) = next_c
+                        && next_c == b'='
+                    {
                         curr_token = curr_token.try_single_char_to_multi();
                         self.consume();
                         self.consume_str();
@@ -260,19 +266,20 @@ impl Lexer{
                     tokens.push(curr_token);
                 }
 
-                _ => {continue;}
+                _ => {
+                    continue;
+                }
             }
         }
 
         // Maybe the last token was multi character
-        if let Some(token_str) = self.consume_str(){
-            let token = Token::parse_str(unsafe { str::from_utf8_unchecked(token_str)})?;
+        if let Some(token_str) = self.consume_str() {
+            let token = Token::parse_str(unsafe { str::from_utf8_unchecked(token_str) })?;
             tokens.push(token);
         }
 
         Ok(tokens)
     }
-
 }
 pub fn print_tokens(tokens: &Vec<Token>) {
     print!("[DBG]: Tokens: [");

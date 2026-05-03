@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::fmt;
 
-use crate::error::Error;
 use crate::common::Value;
+use crate::error::Error;
 use crate::parser::{BinaryOp, UnaryOp};
 
 pub enum Expr {
