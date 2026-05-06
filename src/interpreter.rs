@@ -486,4 +486,48 @@ mod tests {
 
         TestResult::from_bool(res1 == res2)
     }
+
+    #[quickcheck]
+    fn prop_and_domination(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        // false AND anything is always false
+        let expr = format!("false & {}\n", a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_or_domination(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        // true OR anything is always true
+        let expr = format!("true | {}\n", a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(true))
+    }
+
+    #[quickcheck]
+    fn prop_and_complement(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        // A AND NOT A is a contradiction, always false
+        let expr = format!("{} & !{}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_or_complement(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        // A OR NOT A is a tautology, always true
+        let expr = format!("{} | !{}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(true))
+    }
 }
