@@ -1,5 +1,3 @@
-// TODO: Add messages to errors!
-
 mod ast;
 mod common;
 mod error;
@@ -26,8 +24,6 @@ fn main() {
         stdin()
             .read_line(&mut instr)
             .expect("Did not enter a correct string");
-
-        // println!("[DBG]: {}", instr);
 
         if instr.trim() == "q" {
             println!("Exiting...");

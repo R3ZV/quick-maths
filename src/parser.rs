@@ -3,6 +3,7 @@ use crate::common::Value;
 use crate::error::Error;
 use crate::lexer::{Operator, Parenthesis, Token};
 
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum UnaryOp {
     Not,
     Minus,
@@ -24,7 +25,9 @@ impl TryFrom<Operator> for UnaryOp {
 impl UnaryOp {
     pub fn apply(&self, val: Value) -> Result<Value, Error> {
         match (self, val) {
-            (UnaryOp::Minus, Value::Int(v)) => Ok(Value::Int(-v)),
+            (UnaryOp::Minus, Value::Int(v)) => {
+                v.checked_neg().map(Value::Int).ok_or(Error::Overflow)
+            },
             (UnaryOp::Minus, Value::Bool(v)) => Ok(Value::Bool(!v)),
             (UnaryOp::Not, Value::Bool(v)) => Ok(Value::Bool(!v)),
             _ => Err(Error::TypeMismatch),
@@ -32,6 +35,7 @@ impl UnaryOp {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub enum BinaryOp {
     // Arithmetic
     Plus,
@@ -99,10 +103,18 @@ impl BinaryOp {
 
     pub fn apply(&self, val1: Value, val2: Value) -> Result<Value, Error> {
         match (self, val1, val2) {
-            (BinaryOp::Plus, Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
-            (BinaryOp::Minus, Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
-            (BinaryOp::Mull, Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
-            (BinaryOp::Div, Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
+            (BinaryOp::Plus, Value::Int(a), Value::Int(b)) => {
+                a.checked_add(b).map(Value::Int).ok_or(Error::Overflow)
+            }
+            (BinaryOp::Minus, Value::Int(a), Value::Int(b)) => {
+                a.checked_sub(b).map(Value::Int).ok_or(Error::Overflow)
+            }
+            (BinaryOp::Mull, Value::Int(a), Value::Int(b)) => {
+                a.checked_mul(b).map(Value::Int).ok_or(Error::Overflow)
+            }
+            (BinaryOp::Div, Value::Int(a), Value::Int(b)) => {
+                a.checked_div(b).map(Value::Int).ok_or(Error::DivisionByZero)
+            }
 
             (BinaryOp::Less, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
             (BinaryOp::LessEq, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),

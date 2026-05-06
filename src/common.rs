@@ -1,4 +1,5 @@
 use std::fmt;
+
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Value {
     Int(i32),
