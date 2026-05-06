@@ -26,6 +26,7 @@ impl UnaryOp {
         match (self, val) {
             (UnaryOp::Minus, Value::Int(v)) => Ok(Value::Int(-v)),
             (UnaryOp::Minus, Value::Bool(v)) => Ok(Value::Bool(!v)),
+            (UnaryOp::Not, Value::Bool(v)) => Ok(Value::Bool(!v)),
             _ => Err(Error::TypeMismatch),
         }
     }

@@ -328,4 +328,162 @@ mod tests {
             TestResult::discard()
         }
     }
+
+    #[quickcheck]
+    fn prop_not_false_is_true() -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = "!false\n";
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(true))
+    }
+
+    #[quickcheck]
+    fn prop_not_true_is_false() -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = "!true\n";
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_not_double_negation(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = format!("!!{}\n", a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(a))
+    }
+
+    #[quickcheck]
+    fn prop_and_commutative(a: bool, b: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("{} & {}\n", a, b);
+        let expr2 = format!("{} & {}\n", b, a);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_and_identity(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = format!("true & {}\n", a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(a))
+    }
+
+    #[quickcheck]
+    fn prop_and_idempotent(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = format!("{} & {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(a))
+    }
+
+    #[quickcheck]
+    fn prop_or_commutative(a: bool, b: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("{} | {}\n", a, b);
+        let expr2 = format!("{} | {}\n", b, a);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_or_identity(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = format!("false | {}\n", a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(a))
+    }
+
+    #[quickcheck]
+    fn prop_or_idempotent(a: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+        let expr = format!("{} | {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(a))
+    }
+
+    #[quickcheck]
+    fn prop_greater_than_irreflexive(a: i32) -> TestResult {
+        if !is_parseable(a) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+        let expr = format!("{} > {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_less_than_irreflexive(a: i32) -> TestResult {
+        if !is_parseable(a) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+        let expr = format!("{} < {}\n", a, a);
+        let res = interp.run(&expr).unwrap();
+
+        TestResult::from_bool(res == Value::Bool(false))
+    }
+
+    #[quickcheck]
+    fn prop_greater_less_mirror(a: i32, b: i32) -> TestResult {
+        if !is_parseable(a) || !is_parseable(b) {
+            return TestResult::discard();
+        }
+
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("{} > {}\n", a, b);
+        let expr2 = format!("{} < {}\n", b, a);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_de_morgans_and(a: bool, b: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("!({} & {})\n", a, b);
+        let expr2 = format!("!{} | !{}\n", a, b);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
+
+    #[quickcheck]
+    fn prop_de_morgans_or(a: bool, b: bool) -> TestResult {
+        let mut interp = Interpreter::new();
+
+        let expr1 = format!("!({} | {})\n", a, b);
+        let expr2 = format!("!{} & !{}\n", a, b);
+
+        let res1 = interp.run(&expr1).unwrap();
+        let res2 = interp.run(&expr2).unwrap();
+
+        TestResult::from_bool(res1 == res2)
+    }
 }
