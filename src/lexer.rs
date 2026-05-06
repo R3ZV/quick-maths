@@ -7,7 +7,6 @@ use crate::common::Value;
 use crate::error::Error;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-
 pub enum Operator {
     // Arithmetic
     Plus,
@@ -29,6 +28,32 @@ pub enum Operator {
 
     // Assigment operator
     Assign,
+}
+
+#[derive(Debug)]
+enum ValidChar {
+    TokenChar(Token),
+    Sep,
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+pub enum Parenthesis {
+    Open,
+    Closed,
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub enum Token {
+    Val(Value),
+    Var(String),
+    Op(Operator),
+    Par(Parenthesis),
+}
+
+pub struct Lexer {
+    s: Vec<u8>,
+    str_start_i: usize,
+    cursor: usize,
 }
 
 impl FromStr for Operator {
@@ -83,12 +108,6 @@ impl fmt::Display for Operator {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum Parenthesis {
-    Open,
-    Closed,
-}
-
 impl FromStr for Parenthesis {
     type Err = Error;
 
@@ -99,14 +118,6 @@ impl FromStr for Parenthesis {
             _ => Err(Error::ParseToken),
         }
     }
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub enum Token {
-    Val(Value),
-    Var(String),
-    Op(Operator),
-    Par(Parenthesis),
 }
 
 impl Token {
@@ -169,12 +180,6 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug)]
-enum ValidChar {
-    TokenChar(Token),
-    Sep,
-}
-
 impl ValidChar {
     fn from_char(c: char) -> Result<Self, Error> {
         if c == ' ' || c == '\n' || c == '\r' {
@@ -183,12 +188,6 @@ impl ValidChar {
 
         Token::parse_char(c).map(ValidChar::TokenChar)
     }
-}
-
-pub struct Lexer {
-    s: Vec<u8>,
-    str_start_i: usize,
-    cursor: usize,
 }
 
 impl Lexer {

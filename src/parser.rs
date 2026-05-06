@@ -2,37 +2,12 @@ use crate::ast::{Expr, MathExpr};
 use crate::common::Value;
 use crate::error::Error;
 use crate::lexer::{Operator, Parenthesis, Token};
+use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum UnaryOp {
     Not,
     Minus,
-}
-
-impl TryFrom<Operator> for UnaryOp {
-    type Error = Error;
-
-    fn try_from(token: Operator) -> Result<Self, Error> {
-        match token {
-            Operator::Minus => Ok(UnaryOp::Minus),
-            Operator::Not => Ok(UnaryOp::Not),
-
-            _ => Err(Error::InvalidUnaryOp),
-        }
-    }
-}
-
-impl UnaryOp {
-    pub fn apply(&self, val: Value) -> Result<Value, Error> {
-        match (self, val) {
-            (UnaryOp::Minus, Value::Int(v)) => {
-                v.checked_neg().map(Value::Int).ok_or(Error::Overflow)
-            },
-            (UnaryOp::Minus, Value::Bool(v)) => Ok(Value::Bool(!v)),
-            (UnaryOp::Not, Value::Bool(v)) => Ok(Value::Bool(!v)),
-            _ => Err(Error::TypeMismatch),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Copy)]
@@ -54,6 +29,70 @@ pub enum BinaryOp {
     // Logical operators
     And,
     Or,
+}
+
+pub struct Parser {
+    tokens: Vec<Token>,
+    cursor: usize,
+}
+
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UnaryOp::Not => write!(f, "!"),
+            UnaryOp::Minus => write!(f, "-"),
+        }
+    }
+}
+
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            // Arithmetic
+            BinaryOp::Plus => write!(f, "+"),
+            BinaryOp::Minus => write!(f, "-"),
+            BinaryOp::Mull => write!(f, "*"),
+            BinaryOp::Div => write!(f, "/"),
+
+            // Comparison
+            BinaryOp::Less => write!(f, "<"),
+            BinaryOp::LessEq => write!(f, "<="),
+            BinaryOp::Greater => write!(f, ">"),
+            BinaryOp::GreaterEq => write!(f, ">="),
+            BinaryOp::Equal => write!(f, "=="),
+            BinaryOp::NotEqual => write!(f, "!="),
+
+            // Logical
+            BinaryOp::And => write!(f, "&"),
+            BinaryOp::Or => write!(f, "|"),
+        }
+    }
+}
+
+impl TryFrom<Operator> for UnaryOp {
+    type Error = Error;
+
+    fn try_from(token: Operator) -> Result<Self, Error> {
+        match token {
+            Operator::Minus => Ok(UnaryOp::Minus),
+            Operator::Not => Ok(UnaryOp::Not),
+
+            _ => Err(Error::InvalidUnaryOp),
+        }
+    }
+}
+
+impl UnaryOp {
+    pub fn apply(&self, val: Value) -> Result<Value, Error> {
+        match (self, val) {
+            (UnaryOp::Minus, Value::Int(v)) => {
+                v.checked_neg().map(Value::Int).ok_or(Error::Overflow)
+            }
+            (UnaryOp::Minus, Value::Bool(v)) => Ok(Value::Bool(!v)),
+            (UnaryOp::Not, Value::Bool(v)) => Ok(Value::Bool(!v)),
+            _ => Err(Error::TypeMismatch),
+        }
+    }
 }
 
 impl TryFrom<Operator> for BinaryOp {
@@ -112,9 +151,10 @@ impl BinaryOp {
             (BinaryOp::Mull, Value::Int(a), Value::Int(b)) => {
                 a.checked_mul(b).map(Value::Int).ok_or(Error::Overflow)
             }
-            (BinaryOp::Div, Value::Int(a), Value::Int(b)) => {
-                a.checked_div(b).map(Value::Int).ok_or(Error::DivisionByZero)
-            }
+            (BinaryOp::Div, Value::Int(a), Value::Int(b)) => a
+                .checked_div(b)
+                .map(Value::Int)
+                .ok_or(Error::DivisionByZero),
 
             (BinaryOp::Less, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
             (BinaryOp::LessEq, Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
@@ -129,11 +169,6 @@ impl BinaryOp {
             _ => Err(Error::TypeMismatch),
         }
     }
-}
-
-pub struct Parser {
-    tokens: Vec<Token>,
-    cursor: usize,
 }
 
 impl Parser {
