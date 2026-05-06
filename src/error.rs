@@ -10,5 +10,4 @@ pub enum Error {
     InvalidBinOp,
     InvalidUnaryOp,
     TypeMismatch,
-    None,
 }

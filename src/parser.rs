@@ -18,7 +18,6 @@ pub enum BinaryOp {
     Mull,
     Div,
 
-    // Comparison(TODO: Add <=, >= and !=)
     Less,
     LessEq,
     Greater,
