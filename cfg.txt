@@ -1,3 +1,11 @@
+The terminals of this CFG are VAR, NUM, TRUE FALSE, (, ), =, bop, uop which are tokens produced by the lexer.
+bop and uop actually hide all the possible binary and unary operators which are presented in the README
+
+The regex used to parse variables is: ^[A-Za-z_][A-Za-z_0-9]*$
+(Variables have to start with a letter or '_', then they can also contain numbers)
+
+Parsing numbers is done using rust's str.parse::<i32>
+
 S -> A | E
 A -> VAR = E
 
